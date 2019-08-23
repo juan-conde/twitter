@@ -1,18 +1,30 @@
 package main
 
 import (
+	"net/http"
 	"strconv"
 
 	"github.com/abiosoft/ishell"
+	"github.com/gin-gonic/gin"
 	"github.com/juan-conde/twitter/src/domain"
 	"github.com/juan-conde/twitter/src/service"
 )
+
+var tweetManager *service.TweetManager
+
+// JSONTweet structure to receive tweets
+type JSONTweet struct {
+	User      string `json:"user"`
+	Text      string `json:"text"`
+	URL       string `json:"url"`
+	IDMencion string `json:"id"`
+}
 
 func main() {
 
 	var tweetWriter service.TweetWriter
 	tweetWriter = service.NewFileTweetWriter()
-	tweetManager := service.NewTweetManager(tweetWriter)
+	tweetManager = service.NewTweetManager(tweetWriter)
 
 	shell := ishell.New()
 	shell.SetPrompt("Tweeter >> ")
@@ -227,6 +239,64 @@ func main() {
 		},
 	})
 
+	go levantarAPI()
+
 	shell.Run()
 
+}
+
+func levantarAPI() {
+	router := gin.Default()
+
+	router.GET("/tweet", getLastTweet)
+	router.GET("/tweets", getAllTweets)
+	router.GET("/tweet/:id", getTweetByID)
+	router.GET("/tweets/:user", getTweetsByUser)
+
+	router.POST("/tweet", publishTweet)
+
+	router.Run()
+}
+
+func getLastTweet(c *gin.Context) {
+	c.JSON(http.StatusOK, tweetManager.GetTweet())
+}
+
+func getAllTweets(c *gin.Context) {
+	c.JSON(http.StatusOK, tweetManager.GetTweets())
+}
+
+func getTweetByID(c *gin.Context) {
+	idString := c.Param("id")
+	id, _ := strconv.Atoi(idString)
+	c.JSON(http.StatusOK, tweetManager.GetTweetByID(id))
+}
+
+func getTweetsByUser(c *gin.Context) {
+	user := c.Param("user")
+	c.JSON(http.StatusOK, tweetManager.GetTweetsByUser(user))
+}
+
+func publishTweet(c *gin.Context) {
+	var tweetToPublish JSONTweet
+	if err := c.ShouldBindJSON(&tweetToPublish); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	tweet := getTweetOfItsType(tweetToPublish)
+	tweetManager.PublishTweet(tweet)
+	c.JSON(http.StatusOK, tweetManager.GetTweet())
+}
+
+func getTweetOfItsType(jsonTweet JSONTweet) service.Tweet {
+	switch {
+	case jsonTweet.URL != "":
+		return domain.NewImageTweet(jsonTweet.User, jsonTweet.Text, jsonTweet.URL)
+	case jsonTweet.IDMencion != "":
+		id, _ := strconv.Atoi(jsonTweet.IDMencion)
+		return domain.NewQuoteTweet(jsonTweet.User, jsonTweet.Text, tweetManager.GetTweetByID(id))
+	default:
+		return domain.NewTextTweet(jsonTweet.User, jsonTweet.Text)
+	}
 }
