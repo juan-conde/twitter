@@ -43,12 +43,10 @@ func NewFileTweetWriter() *FileTweetWriter {
 		os.O_WRONLY|os.O_TRUNC|os.O_CREATE,
 		0666,
 	)
-	// file, err := os.Create("/Users/jconde/Desktop/fileWriter")
 	if err != nil {
 		fmt.Println(err)
 		panic(err)
 	}
-
 	fileWriter := new(FileTweetWriter)
 	fileWriter.file = file
 	return fileWriter
